@@ -21,8 +21,12 @@ class PrepWiseApp:
     self.style.configure("Header.TLabel", front=("Segoe UI", 18, "bold"))
     self.style.configure("Card.TFrame", background="white")
 
+# Show the login screen 
+self.schow_login_screen()
 def show_login_screen(self):
     self.clear_window ()
+    
+
     
 
         
