@@ -144,40 +144,17 @@ class PrepWiseApp:
         for row, week in enumerate(month, start=1):
             for col, day in enumerate(week):
 
-                if day != 0:
-
-                    today = datetime.now()
-
-    # Check if this is today's date
-                    is_today = (
-                        day == today.day
-                        and self.current_date.month == today.month
-                        and self.current_date.year == today.year
-                    )
-
-                    if is_today:
-                        button_bg = "#c8e6c9"
-                        button_relief = "solid"
-                        button_border = 3
-                    else:
-                        button_bg = "white"
-                        button_relief = "raised"
-                        button_border = 1
-
-                    tk.Button(
-                        self.calendar_frame,
-                        text=day,
-                        width=10,
-                        height=4,
-                        bg=button_bg,
-                        relief=button_relief,
-                        bd=button_border
-                    ).grid(
-                     row=row,
-                    column=col,
-                    padx=2,
-                    pady=2
-                    )
+                tk.Button(
+                self.calendar_frame,
+                text=day if day != 0 else "",
+                width=10,
+                height=4
+            ).grid(
+                row=row,
+                column=col,
+                padx=2,
+                pady=2
+            )
 
     def previous_month(self):
         if self.current_date.month == 1:
@@ -205,6 +182,10 @@ class PrepWiseApp:
         self.create_calendar()      
 
 #-Verion one calender ends here-
+
+
+
+
 
     def meal_reminders(self):
                 self.clear_window()
@@ -259,7 +240,6 @@ class Login_System:
         self.password_entry = tk.Entry(
         self.root,
         font=("Lexend", 12),
-        show="*" #This hides the password to give users privacy
     )
         self.password_entry.pack(pady=10)#This line "pack" tells the system how to organise everything in the window
 #Login Button
@@ -276,6 +256,10 @@ class Login_System:
         username = self.username_entry.get()
         password = self.password_entry.get() #This line allows the user to type inside the username textbox
         if username == "admin" and password == "3344": #This line does the same thing but for the passwordbox
+            messagebox.showinfo(
+            "Login was successful",
+            "Welcome buddy to PrepWise!!"
+        )
         #Removes everything from the login page
             for widget in self.root.winfo_children():
                 widget.destroy()
