@@ -2,18 +2,34 @@
 import tkinter as tk 
 from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime, timedelta
-# from sqlite import database as db
-# import auth
+import sqlite3
 
 class PrepWiseApp:
     def __init__(self, root): #This line "init" is used to give each object its own starting traits like colour and size
         self.root = root #This line "self" is used to keep track of which specific object you are changing 
         self.root.title("PrepWise - Meal Prep Assistant")
-        self.root.geometry("1000x700")
+        self.root.geometry("1000x750")
         self.root.configure(bg="#f5f5f5")
 
         self.current_user_id = None
         self.current_username = None
+        self.meals = {} #This creates an empty list or contianer that will store my food items
+        self.selected_date = None
+
+
+# SQLite Database section
+        self.prepwise_database = sqlite3.connect("prepwise.database")
+        self.database_cursor = self.prepwise_database.cursor()
+
+        self.database_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS meals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT,
+                meal TEXT
+            )
+        """)
+
+        self.prepwise_database.commit()
 
         self.style = ttk.Style() #Style is a variable i created to keep track of the formatting and design of my different items
         self.style.configure("TFrame", background= "#f5f5f5")
@@ -110,7 +126,59 @@ class PrepWiseApp:
                     bg="#f5f5f5"
              )
         self.calendar_frame.pack()
-        self.display_calendar() 
+        self.display_calendar()
+
+ # Add Meal section
+        meal_section = tk.Frame(
+            self.root,
+            bg="white",
+            bd=2,
+            relief="groove"
+        )
+        meal_section.pack(
+            side="right",
+            padx=20,
+            pady=10
+        )
+
+        meal_title = tk.Label(
+            meal_section,
+            text="Add Meal",
+            font=("Lexend", 16, "bold"),
+            bg="white"
+        )
+        meal_title.pack(pady=10)
+        self.selected_date_label = tk.Label(
+            meal_section,
+            text="Select a date",
+            font=("Lexend", 11),
+            bg="white"
+        )
+        self.selected_date_label.pack(pady=5)
+
+        meal_label = tk.Label(
+            meal_section,
+            text="Meal:",
+            font=("Lexend", 11),
+            bg="white"
+        )
+        meal_label.pack()
+
+        self.meal_entry = tk.Entry(
+            meal_section,
+            font=("Lexend", 11),
+            width=20
+        )
+        self.meal_entry.pack(pady=5)
+
+        add_button = tk.Button(
+            meal_section,
+            text="Add",
+            font=("Lexend", 11),
+            width=10,
+            command=self.add_meal #This tells my program to reun the add meal function when triggered/clicked on
+        )
+        add_button.pack(pady=10)
             
         back_button = tk.Button(
                 self.root,
@@ -142,7 +210,7 @@ class PrepWiseApp:
     )
 
         for row, week in enumerate(month, start=1):
-            for col, day in enumerate(week):
+            for col, day in enumerate(week): # "enumerate" used here draws the calender grid and places my days of the week into the right place 
 
                 if day != 0:
 
@@ -166,18 +234,39 @@ class PrepWiseApp:
 
                     tk.Button(
                         self.calendar_frame,
-                        text=day,
+                        text=self.meals.get(
+                            self.current_date.replace(day=day).strftime("%Y-%m-%d"),
+                            day, #Allows my program to know exactly which day was selected
+                        ),
                         width=10,
-                        height=4,
+                        height=3,
                         bg=button_bg,
                         relief=button_relief,
-                        bd=button_border
+                        bd=button_border,
+                        #"lambda" is a throw away function that makes my code more concise and the "d=day" allows python to lock in the correct day for each button during creation
+                        command=lambda d=day: self.select_date(d),
                     ).grid(
-                     row=row,
+                    row=row,
                     column=col,
                     padx=2,
                     pady=2
                     )
+    def select_date(self, day):
+        selected_date = self.current_date.replace(day=day)
+        self.selected_date = selected_date
+
+        if (
+                day == datetime.now().day
+                and self.current_date.month == datetime.now().month
+                and self.current_date.year == datetime.now().year
+        ):
+                self.selected_date_label.config(
+                    text="Today"
+        )
+        else:
+            self.selected_date_label.config(
+            text=selected_date.strftime("%d %B %Y")  # "strftime" is an abbreviate for string fortmat time which is a tool that converts dates into text. 
+        )               
 
     def previous_month(self):
         if self.current_date.month == 1:
@@ -202,8 +291,35 @@ class PrepWiseApp:
             month=self.current_date.month+1
         )
 
-        self.create_calendar()      
+        self.create_calendar()   
+    #Fucntion that adds my meals to my calendar   
+    def add_meal(self):
+        meal = self.meal_entry.get()
 
+        if meal == "":
+            messagebox.showerror(
+            "Error",
+            "Please enter a meal."
+            )
+            return
+
+        if self.selected_date == None:
+            messagebox.showerror(
+            "Error",
+            "Please select a date first."
+            )
+            return
+
+        date = self.selected_date.strftime("%Y-%m-%d") # "%Y-%m-%d" tells my program that it should be a 4 diget year, 2 digit month and 2 digit day.
+    # "strftime" is an abbreviate for string fortmat time which is a tool that converts dates into text. 
+        self.meals[date] = meal
+        self.display_calendar()
+        self.meal_entry.delete(0, tk.END) #This tells my program from what character the user entred till the end to wipe it all away
+
+        messagebox.showinfo(
+        "Meal Added",
+        "Your meal has been added!"
+        )
 #-Verion one calender ends here-
 
     def meal_reminders(self):
