@@ -31,6 +31,9 @@ class PrepWiseApp:
 
         self.prepwise_database.commit()
 
+
+
+
         self.style = ttk.Style() #Style is a variable i created to keep track of the formatting and design of my different items
         self.style.configure("TFrame", background= "#f5f5f5")
         self.style.configure("TLabel", background= "#f5f5f5", font=("Lexend", 10))
@@ -127,7 +130,7 @@ class PrepWiseApp:
              )
         self.calendar_frame.pack()
         self.display_calendar()
-
+    
  # Add Meal section
         meal_section = tk.Frame(
             self.root,
@@ -179,7 +182,37 @@ class PrepWiseApp:
             command=self.add_meal #This tells my program to reun the add meal function when triggered/clicked on
         )
         add_button.pack(pady=10)
-            
+
+
+#Displays saved meals section
+        meal_display = tk.Frame(
+            self.root,
+            bg="white",
+            bd=2,
+            relief="groove"
+        )
+        meal_display.pack(
+            side="left",
+            padx=20,
+            pady=10
+        )
+
+        meal_display_title = tk.Label(
+            meal_display,
+            text="Meals for Selected Date",
+            font=("Lexend", 16, "bold"),
+            bg="white"
+        )
+        meal_display_title.pack(pady=10)
+
+        self.meal_list = tk.Listbox(
+            meal_display,
+            width=25,
+            height=8,
+            font=("Lexend", 11)
+        )
+        self.meal_list.pack(padx=10, pady=10)
+   
         back_button = tk.Button(
                 self.root,
                 text="Back",
@@ -267,16 +300,33 @@ class PrepWiseApp:
             self.selected_date_label.config(
             text=selected_date.strftime("%d %B %Y")  # "strftime" is an abbreviate for string fortmat time which is a tool that converts dates into text. 
         )               
+        self.show_meals() #This tells python that the user just clicked a date, so it has to now show the meals that were saved for that date
+
+    def show_meals(self):
+
+        self.meal_list.delete(0, tk.END)
+
+        date = self.selected_date.strftime("%Y-%m-%d")
+
+        self.database_cursor.execute(
+            "SELECT meal FROM meals WHERE date = ?",
+            (date,)
+        )
+
+        meals = self.database_cursor.fetchall()
+
+        for meal in meals:
+            self.meal_list.insert(tk.END, meal[0])
 
     def previous_month(self):
         if self.current_date.month == 1:
             self.current_date = self.current_date.replace(
-            year=self.current_date.year-1,
+            year=self.current_date.year-1, # Helps my program navagate between the years so if we go back from january to 2025 it will reset and make the year 2025 aswell as December
             month=12
         )
         else:
             self.current_date = self.current_date.replace(
-            month=self.current_date.month-1
+            month=self.current_date.month-1 
         )
 
         self.create_calendar()         
@@ -289,10 +339,10 @@ class PrepWiseApp:
         else:
             self.current_date = self.current_date.replace(
             month=self.current_date.month+1
-        )
-
+        ) 
         self.create_calendar()   
-    #Fucntion that adds my meals to my calendar   
+        
+#Fucntion that adds my meals to my calendar   
     def add_meal(self):
         meal = self.meal_entry.get()
 
@@ -310,16 +360,20 @@ class PrepWiseApp:
             )
             return
 
-        date = self.selected_date.strftime("%Y-%m-%d") # "%Y-%m-%d" tells my program that it should be a 4 diget year, 2 digit month and 2 digit day.
-    # "strftime" is an abbreviate for string fortmat time which is a tool that converts dates into text. 
-        self.meals[date] = meal
-        self.display_calendar()
-        self.meal_entry.delete(0, tk.END) #This tells my program from what character the user entred till the end to wipe it all away
+        date = self.selected_date.strftime("%Y-%m-%d")
 
-        messagebox.showinfo(
-        "Meal Added",
-        "Your meal has been added!"
+        self.database_cursor.execute(
+            "INSERT INTO meals (date, meal) VALUES (?, ?)",
+            (date, meal)
         )
+        self.prepwise_database.commit()
+        self.meal_entry.delete(0, tk.END) #This tells my program from what character the user entred till the end to wipe it all away
+        self.show_meals()
+        messagebox.showinfo(
+            "Meal Added",
+            "Your meal has been added!"
+        )
+
 #-Verion one calender ends here-
 
     def meal_reminders(self):
