@@ -31,8 +31,16 @@ class PrepWiseApp:
 
         self.prepwise_database.commit()
 
+        self.database_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recipes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT,
+                ingredients TEXT,
+                instructions TEXT
+            )
+        """)
 
-
+        self.prepwise_database.commit()
 
         self.style = ttk.Style() #Style is a variable i created to keep track of the formatting and design of my different items
         self.style.configure("TFrame", background= "#f5f5f5")
@@ -61,12 +69,6 @@ class PrepWiseApp:
                 text="Meal Reminders",
                 width=30,
                 command=self.meal_reminders
-            ).pack(pady=10)
-        tk.Button(
-                self.root,
-                text="AI Recipe Generator",
-                width=30,
-                command=self.recipe_generator
             ).pack(pady=10)
         tk.Button(
                 self.root,
@@ -374,7 +376,7 @@ class PrepWiseApp:
             "Your meal has been added!"
         )
 
-#-Verion one calender ends here-
+#-Verion two calender ends here-
 
     def meal_reminders(self):
                 self.clear_window()
@@ -385,6 +387,349 @@ class PrepWiseApp:
     def cookbook(self):
                 self.clear_window()
 
+                # My Cookbook Title 
+                title = tk.Label(
+                    self.root,
+                    text="My Cookbook",
+                    font=("Lexend", 24, "bold"),
+                    bg="#f5f5f5"
+                )
+                title.pack(pady=20)
+
+                # Recipe name
+                name_label = tk.Label(
+                    self.root,
+                    text="Recipe Name:",
+                    font=("Lexend", 11),
+                    bg="#f5f5f5"
+                )
+                name_label.pack()
+
+                self.recipe_name_entry = tk.Entry(
+                    self.root,
+                    font=("Lexend", 11),
+                    width=40
+                )
+                self.recipe_name_entry.pack(pady=5)
+
+                # Ingredients
+                ingredients_label = tk.Label(
+                    self.root,
+                    text="Ingredients:",
+                    font=("Lexend", 11),
+                    bg="#f5f5f5"
+                )
+                ingredients_label.pack()
+
+                self.ingredients_entry = scrolledtext.ScrolledText(
+                    self.root,
+                    width=45,
+                    height=6,
+                    font=("Lexend", 11)
+                )
+                self.ingredients_entry.pack(pady=5)
+
+                # Instructions
+                instructions_label = tk.Label(
+                    self.root,
+                    text="Instructions:",
+                    font=("Lexend", 11),
+                    bg="#f5f5f5"
+                )
+                instructions_label.pack()
+
+                self.instructions_entry = scrolledtext.ScrolledText(
+                    self.root,
+                    width=45,
+                    height=6,
+                    font=("Lexend", 11)
+                )
+                self.instructions_entry.pack(pady=5)
+
+                 # Save button
+                save_button = tk.Button(
+                    self.root,
+                    text="Save Recipe",
+                    font=("Lexend", 11),
+                    width=15,
+                    command=self.save_recipe
+                )
+                save_button.pack(pady=10)
+
+                # Saved recipes heading
+                saved_label = tk.Label(
+                    self.root,
+                    text="Saved Recipes",
+                    font=("Lexend", 16, "bold"),
+                    bg="#f5f5f5"
+                )
+                saved_label.pack(pady=10)
+
+                # List of saved recipes
+                self.recipe_list = tk.Listbox(
+                    self.root,
+                    width=45,
+                    height=8,
+                    font=("Lexend", 11)
+                )
+                self.recipe_list.pack(pady=10)
+                self.recipe_list.bind( # Bind meand when u slect a recipe from the list that it will run the show recipie function
+                "<<ListboxSelect>>",
+                self.show_recipe
+                )
+
+                # Back button
+                back_button = tk.Button(
+                    self.root,
+                    text="Back",
+                    command=self.show_dashboard
+                )
+                back_button.pack(pady=15)
+
+                # Load recipes already stored in database
+                self.load_recipes()
+
+    def load_recipes(self):
+        self.recipe_list.delete(0, tk.END)
+
+        self.database_cursor.execute(
+            "SELECT name FROM recipes ORDER BY name"
+        )
+
+        recipes = self.database_cursor.fetchall()
+
+        for recipe in recipes:
+            self.recipe_list.insert(tk.END, recipe[0])
+
+    def show_recipe(self, event):
+        selected = self.recipe_list.curselection()
+
+        if not selected:
+            return
+
+        recipe_name = self.recipe_list.get(selected[0])
+
+        self.database_cursor.execute(
+            """
+            SELECT ingredients, instructions
+            FROM recipes
+            WHERE name = ?
+            """,
+            (recipe_name,)
+        )
+
+        recipe = self.database_cursor.fetchone()
+
+        if recipe:
+            ingredients = recipe[0]
+            instructions = recipe[1]
+
+            messagebox.showinfo(
+                recipe_name,
+                "Ingredients:\n\n"
+                + ingredients
+                + "\n\nInstructions:\n\n"
+                + instructions
+            )
+
+
+    def view_recipe(self, recipe_id):
+        self.clear_window()
+
+    # Get the selected recipe from the database
+        self.database_cursor.execute(
+            "SELECT name, ingredients, instructions FROM recipes WHERE id = ?",
+            (recipe_id,)
+        )
+
+        recipe = self.database_cursor.fetchone()
+
+    # Recipe name
+        title = tk.Label(
+            self.root,
+            text=recipe[0],
+            font=("Lexend", 24, "bold"),
+            bg="#f5f5f5"
+        )
+        title.pack(pady=20)
+
+    # Ingredients
+        ingredients_label = tk.Label(
+            self.root,
+            text="Ingredients",
+            font=("Lexend", 16, "bold"),
+            bg="#f5f5f5"
+        )
+        ingredients_label.pack(pady=5)
+
+        ingredients_text = scrolledtext.ScrolledText(
+            self.root,
+            width=50,
+            height=8,
+            font=("Lexend", 11)
+        )
+        ingredients_text.pack(pady=5)
+
+        ingredients_text.insert(
+            tk.END,
+            recipe[1]
+        )
+
+        ingredients_text.config(state="disabled")
+
+    # Instructions
+        instructions_label = tk.Label(
+            self.root,
+            text="Instructions",
+            font=("Lexend", 16, "bold"),
+            bg="#f5f5f5"
+        )
+        instructions_label.pack(pady=5)
+
+        instructions_text = scrolledtext.ScrolledText(
+            self.root,
+            width=50,
+            height=8,
+            font=("Lexend", 11)
+        )
+        instructions_text.pack(pady=5)
+
+        instructions_text.insert(
+            tk.END,
+            recipe[2]
+        )
+
+        instructions_text.config(state="disabled")
+
+    # Back button
+        back_button = tk.Button(
+            self.root,
+            text="Back",
+            font=("Lexend", 11),
+            width=15,
+            command=self.cookbook
+        )
+        back_button.pack(pady=15)
+
+    def add_recipe(self):
+        self.clear_window()
+
+        # Title
+        title = tk.Label(
+            self.root,
+            text="Add Recipe",
+            font=("Lexend", 24, "bold"),
+            bg="#f5f5f5"
+        )
+        title.pack(pady=20)
+
+        # Recipe name
+        name_label = tk.Label(
+            self.root,
+            text="Recipe Name:",
+            font=("Lexend", 11),
+            bg="#f5f5f5"
+        )
+        name_label.pack()
+
+        self.recipe_name_entry = tk.Entry(
+            self.root,
+            font=("Lexend", 11),
+            width=40
+        )
+        self.recipe_name_entry.pack(pady=5)
+
+        # Ingredients
+        ingredients_label = tk.Label(
+            self.root,
+            text="Ingredients:",
+            font=("Lexend", 11),
+            bg="#f5f5f5"
+        )
+        ingredients_label.pack()
+
+        self.ingredients_entry = scrolledtext.ScrolledText(
+            self.root,
+            width=40,
+            height=8,
+            font=("Lexend", 11)
+        )
+        self.ingredients_entry.pack(pady=5)
+
+        # Instructions
+        instructions_label = tk.Label(
+            self.root,
+            text="Instructions:",
+            font=("Lexend", 11),
+            bg="#f5f5f5"
+        )
+        instructions_label.pack()
+
+        self.instructions_entry = scrolledtext.ScrolledText(
+            self.root,
+            width=40,
+            height=8,
+            font=("Lexend", 11)
+        )
+        self.instructions_entry.pack(pady=5)
+
+        # Save button
+        save_button = tk.Button(
+            self.root,
+            text="Save Recipe",
+            font=("Lexend", 11),
+            width=20,
+            command=self.save_recipe
+        )
+        save_button.pack(pady=10)
+
+        # Back button
+        back_button = tk.Button(
+            self.root,
+            text="Back",
+            font=("Lexend", 11),
+            width=15,
+            command=self.cookbook
+        )
+        back_button.pack(pady=5)
+
+    def save_recipe(self):
+        recipe_name = self.recipe_name_entry.get()
+        ingredients = self.ingredients_entry.get("1.0", tk.END).strip()
+        instructions = self.instructions_entry.get("1.0", tk.END).strip()
+
+        if recipe_name == "":
+            messagebox.showerror("Error", "Please enter a recipe name.")
+            return
+
+        if ingredients == "":
+            messagebox.showerror("Error", "Please enter the ingredients.")
+            return
+
+        if instructions == "":
+            messagebox.showerror("Error", "Please enter the instructions.")
+            return
+
+        self.database_cursor.execute(
+            """
+            INSERT INTO recipes (name, ingredients, instructions)
+            VALUES (?, ?, ?)
+            """,
+            (recipe_name, ingredients, instructions)
+        )
+
+        self.prepwise_database.commit()
+
+        messagebox.showinfo(
+        "Recipe Saved",
+        "Your recipe has been saved!"
+        )
+
+        self.recipe_name_entry.delete(0, tk.END)
+        self.ingredients_entry.delete("1.0", tk.END)
+        self.instructions_entry.delete("1.0", tk.END)
+
+        self.load_recipes()
     def logout(self):
                 self.clear_window()
                 Login_System(self.root)

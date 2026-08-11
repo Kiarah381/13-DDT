@@ -57,7 +57,12 @@ class PrepWiseApp:
                 width=30,
                 command=self.meal_reminders
             ).pack(pady=10)
-        
+        tk.Button(
+                self.root,
+                text="AI Recipe Generator",
+                width=30,
+                command=self.recipe_generator
+            ).pack(pady=10)
         tk.Button(
                 self.root,
                 text="My Cookbook",
@@ -191,6 +196,9 @@ class PrepWiseApp:
         self.create_calendar()      
 
 #-Verion one calender ends here-
+
+
+
 
 
     def meal_reminders(self):
