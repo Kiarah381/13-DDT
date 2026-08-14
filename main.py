@@ -408,7 +408,7 @@ class PrepWiseApp:
                 self.recipe_name_entry = tk.Entry(
                     self.root,
                     font=("Lexend", 11),
-                    width=40
+                    width=50
                 )
                 self.recipe_name_entry.pack(pady=5)
 
@@ -423,8 +423,8 @@ class PrepWiseApp:
 
                 self.ingredients_entry = scrolledtext.ScrolledText(
                     self.root,
-                    width=45,
-                    height=6,
+                    width=55,
+                    height=5,
                     font=("Lexend", 11)
                 )
                 self.ingredients_entry.pack(pady=5)
@@ -440,8 +440,8 @@ class PrepWiseApp:
 
                 self.instructions_entry = scrolledtext.ScrolledText(
                     self.root,
-                    width=45,
-                    height=6,
+                    width=55,
+                    height=5,
                     font=("Lexend", 11)
                 )
                 self.instructions_entry.pack(pady=5)
@@ -465,19 +465,95 @@ class PrepWiseApp:
                 )
                 saved_label.pack(pady=10)
 
+                # Recipe area
+                recipe_area = tk.Frame(
+                    self.root,
+                    bg="#f5f5f5"
+                )
+                recipe_area.pack(pady=5)
+
                 # List of saved recipes
                 self.recipe_list = tk.Listbox(
-                    self.root,
-                    width=45,
+                    recipe_area,
+                    width=30,
                     height=8,
                     font=("Lexend", 11)
                 )
-                self.recipe_list.pack(pady=10)
-                self.recipe_list.bind( # Bind meand when u slect a recipe from the list that it will run the show recipie function
-                "<<ListboxSelect>>",
-                self.show_recipe
+                self.recipe_list.grid(
+                    row=0,
+                    column=0,
+                    padx=10,
+                    pady=10
                 )
 
+                self.recipe_list.bind(
+                    "<<ListboxSelect>>",
+                    self.show_recipe
+                )
+                # Recipe display section
+                recipe_display = tk.Frame(
+                    recipe_area,
+                    bg="white",
+                    bd=2,
+                    relief="groove",
+                    width=400,
+                    height=300
+                )
+                recipe_display.grid(
+                    row=0,
+                    column=1,
+                    padx=10,
+                    pady=10
+                )
+                # Recipe title
+                self.recipe_display_title = tk.Label(
+                    recipe_display,
+                    text="Select a recipe",
+                    font=("Lexend", 18, "bold"),
+                    bg="white"
+                )
+                self.recipe_display_title.pack(pady=10)
+
+                # Ingredients heading
+                ingredients_label = tk.Label(
+                    recipe_display,
+                    text="Ingredients",
+                    font=("Lexend", 13, "bold"),
+                    bg="white"
+                )
+                ingredients_label.pack()
+                # Ingredients box
+                self.recipe_ingredients = scrolledtext.ScrolledText(
+                    recipe_display,
+                    width=35,
+                    height=5,
+                    font=("Lexend", 10)
+                )
+                self.recipe_ingredients.pack(
+                    padx=10,
+                    pady=5
+                )
+
+                # Instructions heading
+                instructions_label = tk.Label(
+                    recipe_display,
+                    text="Instructions",
+                    font=("Lexend", 13, "bold"),
+                    bg="white"
+                )
+                instructions_label.pack()
+
+                # Instructions box
+                self.recipe_instructions = scrolledtext.ScrolledText(
+                    recipe_display,
+                    width=35,
+                    height=5,
+                    font=("Lexend", 10)
+                )
+                self.recipe_instructions.pack(
+                    padx=10,
+                    pady=5
+                )
                 # Back button
                 back_button = tk.Button(
                     self.root,
@@ -485,7 +561,6 @@ class PrepWiseApp:
                     command=self.show_dashboard
                 )
                 back_button.pack(pady=15)
-
                 # Load recipes already stored in database
                 self.load_recipes()
 
@@ -524,15 +599,24 @@ class PrepWiseApp:
             ingredients = recipe[0]
             instructions = recipe[1]
 
-            messagebox.showinfo(
-                recipe_name,
-                "Ingredients:\n\n"
-                + ingredients
-                + "\n\nInstructions:\n\n"
-                + instructions
-            )
+        # Display recipe name
+        self.recipe_display_title.config(
+            text=recipe_name
+        )
 
+        # Display ingredients
+        self.recipe_ingredients.delete("1.0", tk.END)
+        self.recipe_ingredients.insert(
+            tk.END,
+            ingredients
+        )
 
+        # Display instructions
+        self.recipe_instructions.delete("1.0", tk.END)
+        self.recipe_instructions.insert(
+            tk.END,
+            instructions
+        )
     def view_recipe(self, recipe_id):
         self.clear_window()
 
@@ -551,7 +635,7 @@ class PrepWiseApp:
             font=("Lexend", 24, "bold"),
             bg="#f5f5f5"
         )
-        title.pack(pady=20)
+        title.pack(pady=20)           
 
     # Ingredients
         ingredients_label = tk.Label(
