@@ -42,6 +42,18 @@ class PrepWiseApp:
 
         self.prepwise_database.commit()
 
+        # Creates the reminders table
+        self.database_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS reminders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT,
+                time TEXT,
+                reminder TEXT
+            )
+        """)
+
+        self.prepwise_database.commit()
+
         self.style = ttk.Style() #Style is a variable i created to keep track of the formatting and design of my different items
         self.style.configure("TFrame", background= "#f5f5f5")
         self.style.configure("TLabel", background= "#f5f5f5", font=("Lexend", 10))
@@ -380,10 +392,290 @@ class PrepWiseApp:
 
     def meal_reminders(self):
                 self.clear_window()
+                # Title
+                title = tk.Label(
+                    self.root,
+                    text="Meal Reminders",
+                    font=("Lexend", 24, "bold"),
+                    bg="#f5f5f5"
+                )
+                title.pack(pady=20)
 
-    def recipe_generator(self):
-                self.clear_window()
+                # Reminder creation frame
+                reminder_frame = tk.Frame(
+                    self.root,
+                    bg="white",
+                    bd=2,
+                    relief="groove"
+                )
+                reminder_frame.pack(pady=10)
 
+                # Date
+                date_label = tk.Label(
+                reminder_frame,
+                    text="Date (DD/MM/YYYY):",
+                    font=("Lexend", 11),
+                    bg="white"
+                )
+                date_label.pack(pady=5)
+
+                self.reminder_date_entry = tk.Entry(
+                    reminder_frame,
+                    font=("Lexend", 11),
+                    width=25
+                )
+                self.reminder_date_entry.pack(pady=5)
+
+                # Time
+                time_label = tk.Label(
+                    reminder_frame,
+                    text="Time (HH:MM):",
+                    font=("Lexend", 11),
+                    bg="white"
+                )
+                time_label.pack(pady=5)
+
+                self.reminder_time_entry = tk.Entry(
+                    reminder_frame,
+                    font=("Lexend", 11),
+                    width=25
+                )
+                self.reminder_time_entry.pack(pady=5)
+
+                # Reminder message
+                reminder_label = tk.Label(
+                    reminder_frame,
+                    text="Reminder:",
+                    font=("Lexend", 11),
+                    bg="white"
+                )
+                reminder_label.pack(pady=5)
+
+                self.reminder_entry = tk.Entry(
+                    reminder_frame,
+                    font=("Lexend", 11),
+                    width=40
+                )
+                self.reminder_entry.pack(pady=5)
+
+                #Reminder button
+                add_button = tk.Button(
+                    reminder_frame,
+                    text="Add Reminder",
+                    font=("Lexend", 11),
+                    width=15,
+                    command=self.add_reminder
+                )
+                add_button.pack(pady=10)
+
+                # Saved reminders heading
+                saved_label = tk.Label(
+                    self.root,
+                    text="Saved Reminders",
+                    font=("Lexend", 16, "bold"),
+                    bg="#f5f5f5"
+                )
+                saved_label.pack(pady=10)
+
+                # Reminder list
+                self.reminder_list = tk.Listbox(
+                    self.root,
+                    width=70,
+                    height=10,
+                    font=("Lexend", 11)
+                )
+                self.reminder_list.pack(pady=5)
+
+                # Delete button
+                delete_button = tk.Button(
+                    self.root,
+                    text="Delete Reminder",
+                    font=("Lexend", 11),
+                    width=15,
+                    command=self.delete_reminder
+                )
+                delete_button.pack(pady=5)
+
+                # Back button
+                back_button = tk.Button(
+                    self.root,
+                    text="Back",
+                    font=("Lexend", 11),
+                    width=15,
+                    command=self.show_dashboard
+                )
+                back_button.pack(pady=10)
+
+                # Load saved reminders
+                self.load_reminders()
+
+                # Check for notifications
+                self.check_notifications()
+
+    def add_reminder(self):
+        date = self.reminder_date_entry.get()
+        time = self.reminder_time_entry.get()
+        reminder = self.reminder_entry.get()
+
+        # Checks that all fields have been completed
+        if date == "" or time == "" or reminder == "":
+            messagebox.showerror(
+                "Error",
+                "Please complete all reminder fields."
+            )
+            return
+
+        # Checks that the date and time are valid
+        try:
+            datetime.strptime(
+                date + " " + time,
+                "%d/%m/%Y %H:%M"
+            )
+        except ValueError:
+            messagebox.showerror(
+                "Error",
+                "Please enter the date as DD/MM/YYYY and time as HH:MM."
+            )
+            return
+    
+        # Saves the reminder to the database
+        self.database_cursor.execute(
+            """
+            INSERT INTO reminders (date, time, reminder)
+            VALUES (?, ?, ?)
+            """,
+            (date, time, reminder)
+        )
+
+        self.prepwise_database.commit()
+
+        # Clears the entry boxes
+        self.reminder_date_entry.delete(0, tk.END)
+        self.reminder_time_entry.delete(0, tk.END)
+        self.reminder_entry.delete(0, tk.END)
+
+        # Refreshes the reminder list
+        self.load_reminders()
+
+        messagebox.showinfo(
+            "Reminder Added",
+            "Your reminder has been saved!"
+        )
+
+    def load_reminders(self):
+        self.reminder_list.delete(0, tk.END)
+        self.database_cursor.execute(
+            """
+            SELECT date, time, reminder
+            FROM reminders
+            ORDER BY date, time
+            """
+        )
+        reminders = self.database_cursor.fetchall()
+
+        for reminder in reminders:
+            date = reminder[0]
+            time = reminder[1]
+            text = reminder[2]
+
+            self.reminder_list.insert(
+                tk.END,
+                f"{date} at {time} - {text}"
+            )
+
+    def delete_reminder(self):
+        selected = self.reminder_list.curselection()
+
+        if not selected:
+            messagebox.showerror(
+                "Error",
+                "Please select a reminder to delete."
+            )
+            return
+
+        # Gets the selected reminder
+        selected_text = self.reminder_list.get(selected[0])
+
+        # Confirm deletion
+        confirm = messagebox.askyesno(
+            "Delete Reminder",
+            "Are you sure you want to delete this reminder?"
+        )
+
+        if not confirm:
+            return
+
+        # Gets all reminders from the database
+        self.database_cursor.execute(
+            """
+            SELECT id, date, time, reminder
+            FROM reminders
+            ORDER BY date, time
+            """
+        )
+        reminders = self.database_cursor.fetchall()
+
+        # Finds the database ID of the selected reminder
+        selected_reminder = reminders[selected[0]]
+        reminder_id = selected_reminder[0]
+
+        # Delete the reminder
+        self.database_cursor.execute(
+            "DELETE FROM reminders WHERE id = ?",
+            (reminder_id,)
+        )
+
+        self.prepwise_database.commit()
+        # Refresh the list
+        self.load_reminders()
+
+        messagebox.showinfo(
+            "Reminder Deleted",
+            "The reminder has been deleted."
+        )
+
+    def check_notifications(self):
+        # Get the current date and time
+        current_datetime = datetime.now()
+
+        current_date = current_datetime.strftime("%d/%m/%Y")
+        current_time = current_datetime.strftime("%H:%M")
+
+        # Finds reminders that match the current date and time
+        self.database_cursor.execute(
+            """
+            SELECT id, reminder
+            FROM reminders
+            WHERE date = ? AND time = ?
+            """,
+            (current_date, current_time)
+        )
+        reminders = self.database_cursor.fetchall()
+
+        # Shows a notification for each matching reminder
+        for reminder in reminders:
+
+            messagebox.showinfo(
+                "PrepWise Reminder",
+                reminder[1]
+            )
+
+            # Delete the reminder after it has been shown
+            self.database_cursor.execute(
+                "DELETE FROM reminders WHERE id = ?",
+                (reminder[0],)
+            )
+            self.prepwise_database.commit()
+
+        # Refresh the list
+        self.load_reminders()
+
+        # Check again in 30 seconds
+        self.root.after(
+            30000,
+            self.check_notifications
+        )
+    
     def cookbook(self):
                 self.clear_window()
 
@@ -465,23 +757,43 @@ class PrepWiseApp:
                 )
                 saved_label.pack(pady=10)
 
-                # Recipe area
+                # Main area containing recipe list and recipe display
                 recipe_area = tk.Frame(
                     self.root,
                     bg="#f5f5f5"
                 )
                 recipe_area.pack(pady=5)
 
-                # List of saved recipes
-                self.recipe_list = tk.Listbox(
+                #Left side - Saved Recipes
+                list_frame = tk.Frame(
                     recipe_area,
-                    width=30,
-                    height=8,
+                    bg="white",
+                    bd=2,
+                    relief="groove"
+                )
+                list_frame.grid(
+                row=0,
+                column=0,
+                padx=10,
+                pady=5,
+                sticky="n"
+                )
+
+                list_title = tk.Label(
+                list_frame,
+                text="Saved Recipes",
+                font=("Lexend", 13, "bold"),
+               bg="white"
+                )
+                list_title.pack(pady=8)
+
+                self.recipe_list = tk.Listbox(
+                    list_frame,
+                    width=28,
+                    height=14,
                     font=("Lexend", 11)
                 )
-                self.recipe_list.grid(
-                    row=0,
-                    column=0,
+                self.recipe_list.pack(
                     padx=10,
                     pady=10
                 )
@@ -490,77 +802,102 @@ class PrepWiseApp:
                     "<<ListboxSelect>>",
                     self.show_recipe
                 )
-                # Recipe display section
+                # Delete Recipe button
+                delete_button = tk.Button(
+                    self.root,
+                    text="Delete Recipe",
+                    font=("Lexend", 11),
+                    width=15,
+                    command=self.delete_recipe
+                )
+                delete_button.pack(pady=5)
+                
+
+            #Right side - recipe display
                 recipe_display = tk.Frame(
                     recipe_area,
                     bg="white",
                     bd=2,
                     relief="groove",
-                    width=400,
-                    height=300
+                    width=600,
+                    height=400
                 )
                 recipe_display.grid(
                     row=0,
                     column=1,
                     padx=10,
-                    pady=10
+                    pady=5,
+                    sticky="n"
                 )
+                # Prevent the frame from shrinking
+                recipe_display.grid_propagate(False) #This keeps the frame at a size that I want wihout letting the widgets chnage its size.
+
                 # Recipe title
                 self.recipe_display_title = tk.Label(
                     recipe_display,
                     text="Select a recipe",
                     font=("Lexend", 18, "bold"),
-                    bg="white"
+                    bg="white",
+                    wraplength=550
                 )
-                self.recipe_display_title.pack(pady=10)
+                self.recipe_display_title.pack(
+                    pady=12
+                )
 
                 # Ingredients heading
-                ingredients_label = tk.Label(
+                ingredients_heading = tk.Label(
                     recipe_display,
                     text="Ingredients",
                     font=("Lexend", 13, "bold"),
                     bg="white"
                 )
-                ingredients_label.pack()
+                ingredients_heading.pack()
+
                 # Ingredients box
                 self.recipe_ingredients = scrolledtext.ScrolledText(
                     recipe_display,
-                    width=35,
-                    height=5,
-                    font=("Lexend", 10)
+                    width=65,
+                    height=7,
+                    font=("Lexend", 10),
+                    wrap=tk.WORD #This means if an ingredient or instruction is too long, Tkinter will automatically movie it onto the next line. 
                 )
                 self.recipe_ingredients.pack(
-                    padx=10,
+                    padx=15,
                     pady=5
                 )
 
                 # Instructions heading
-                instructions_label = tk.Label(
+                instructions_heading = tk.Label(
                     recipe_display,
                     text="Instructions",
                     font=("Lexend", 13, "bold"),
                     bg="white"
                 )
-                instructions_label.pack()
+                instructions_heading.pack()
 
                 # Instructions box
                 self.recipe_instructions = scrolledtext.ScrolledText(
                     recipe_display,
-                    width=35,
-                    height=5,
-                    font=("Lexend", 10)
+                    width=65,
+                    height=7,
+                    font=("Lexend", 10),
+                    wrap=tk.WORD
                 )
                 self.recipe_instructions.pack(
-                    padx=10,
-                    pady=5
+                padx=15,
+                pady=5
                 )
+
                 # Back button
                 back_button = tk.Button(
                     self.root,
                     text="Back",
+                    font=("Lexend", 11),
+                    width=15,
                     command=self.show_dashboard
                 )
-                back_button.pack(pady=15)
+                back_button.pack(pady=10)
+
                 # Load recipes already stored in database
                 self.load_recipes()
 
@@ -575,6 +912,62 @@ class PrepWiseApp:
 
         for recipe in recipes:
             self.recipe_list.insert(tk.END, recipe[0])
+
+    def delete_recipe(self):
+        # Get the recipe selected in the list
+        selected = self.recipe_list.curselection()
+
+        # Check if the user selected a recipe
+        if not selected:
+            messagebox.showerror(
+                "Error",
+                "Please select a recipe to delete."
+            )
+            return
+
+        # Get the name of the selected recipe
+        recipe_name = self.recipe_list.get(selected[0])
+
+        # Ask the user to confirm the deletion
+        confirm = messagebox.askyesno(
+            "Delete Recipe",
+            f"Are you sure you want to delete '{recipe_name}'?"
+        )
+        # Stop if the user chooses No
+        if not confirm:
+            return
+
+        # Delete the recipe from the database
+        self.database_cursor.execute(
+            "DELETE FROM recipes WHERE name = ?",
+            (recipe_name,)
+        )
+
+        # Save the change to the database
+        self.prepwise_database.commit()
+
+        # Remove the recipe from the Listbox
+        self.recipe_list.delete(selected[0])
+
+        # Clear the recipe display
+        self.recipe_display_title.config(
+            text="Select a recipe"
+        )
+
+        self.recipe_ingredients.delete(
+            "1.0",
+            tk.END
+        )
+        self.recipe_instructions.delete(
+            "1.0",
+            tk.END
+        )
+
+        # Tell the user the recipe was deleted
+        messagebox.showinfo(
+            "Recipe Deleted",
+            "The recipe has been deleted."
+        )
 
     def show_recipe(self, event):
         selected = self.recipe_list.curselection()
