@@ -15,7 +15,7 @@ class PrepWiseApp:
         self.current_username = None
 
 # SQLite Database section
-        self.prepwise_database = sqlite3.connect("prepwise.database")
+        self.prepwise_database = sqlite3.connect("prepwise.db")
         self.database_cursor = self.prepwise_database.cursor()
 
         self.database_cursor.execute("""

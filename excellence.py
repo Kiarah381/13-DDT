@@ -3,69 +3,101 @@ from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime
 import calendar
 import sqlite3
+import hashlib
+import os
+import hmac
 
 
 class PrepWiseApp:
-    def __init__(self, root):
-        self.root = root #Sets the text for my title at the top of my apps window
-        self.root.title("PrepWise - Meal Prep Assistant")
-        self.root.geometry("1000x750") #Sets the strating width and height of my application 
-        self.root.minsize(700, 600) #Sets the smallest width and height that the user is allowed to chnage the size too 
+    def __init__(self, root, user_id, username):
+        self.root = root
+        self.user_id = user_id
+        self.username = username
 
-        self.selected_date = None #This tells my program what the exact date and time it is today so that it can use it
+        self.root.title(f"PrepWise - {username}")
+        self.root.geometry("1000x750")
+        self.root.minsize(700, 600)
+
+        self.selected_date = None
         self.current_date = datetime.now()
         self.reminder_job = None
 
-        # Database
+        # ======================================================
+        # DATABASE
+        # ======================================================
+
         self.database = sqlite3.connect("prepwise.db")
         self.cursor = self.database.cursor()
 
         self.create_database()
 
-        # Styling
+        # ======================================================
+        # STYLE
+        # ======================================================
+
         self.setup_style()
 
-        # Start the dashboard
+        # ======================================================
+        # START DASHBOARD
+        # ======================================================
+
         self.create_dashboard()
 
-        # Close database properly when window closes
-        self.root.protocol("WM_DELETE_WINDOW", self.close_app)
+        self.root.protocol(
+            "WM_DELETE_WINDOW",
+            self.close_app
+        )
 
     # ==========================================================
-    # Database
+    # DATABASE
     # ==========================================================
 
     def create_database(self):
         self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL
+            )
+        """)
+
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS meals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
                 date TEXT NOT NULL,
-                meal TEXT NOT NULL
+                meal TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
 
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS recipes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
                 name TEXT NOT NULL,
                 ingredients TEXT NOT NULL,
-                instructions TEXT NOT NULL
+                instructions TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
 
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS reminders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
                 date TEXT NOT NULL,
                 time TEXT NOT NULL,
-                reminder TEXT NOT NULL
+                reminder TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
 
         self.database.commit()
 
     # ==========================================================
-    # Style
+    # STYLE
     # ==========================================================
 
     def setup_style(self):
@@ -240,6 +272,10 @@ class PrepWiseApp:
             font=("Lexend", 11, "bold")
         )
 
+    # ==========================================================
+    # HELPER FUNCTIONS
+    # ==========================================================
+
     def create_button(
         self,
         parent,
@@ -272,7 +308,7 @@ class PrepWiseApp:
             )
 
     # ==========================================================
-    # General functions
+    # GENERAL FUNCTIONS
     # ==========================================================
 
     def clear_window(self):
@@ -282,6 +318,10 @@ class PrepWiseApp:
     def show_dashboard(self):
         self.stop_reminder_checker()
         self.create_dashboard()
+
+    # ==========================================================
+    # DASHBOARD
+    # ==========================================================
 
     def create_dashboard(self):
         self.clear_window()
@@ -325,7 +365,7 @@ class PrepWiseApp:
 
         ttk.Label(
             content,
-            text="Welcome to PrepWise!",
+            text=f"Welcome, {self.username}!",
             style="Subtitle.TLabel",
             anchor="center"
         ).grid(
@@ -406,7 +446,7 @@ class PrepWiseApp:
             )
 
     # ==========================================================
-    # Calender
+    # CALENDAR
     # ==========================================================
 
     def monthly_calendar(self):
@@ -657,6 +697,10 @@ class PrepWiseApp:
             pady=(15, 0)
         )
 
+    # ==========================================================
+    # DISPLAY CALENDAR
+    # ==========================================================
+
     def display_calendar(self):
         for widget in self.calendar_frame.winfo_children():
             widget.destroy()
@@ -728,9 +772,12 @@ class PrepWiseApp:
                     """
                     SELECT COUNT(*)
                     FROM meals
-                    WHERE date = ?
+                    WHERE user_id = ? AND date = ?
                     """,
-                    (date_string,)
+                    (
+                        self.user_id,
+                        date_string
+                    )
                 )
 
                 meal_count = self.cursor.fetchone()[0]
@@ -768,8 +815,14 @@ class PrepWiseApp:
                     pady=2
                 )
 
+    # ==========================================================
+    # SELECT DATE
+    # ==========================================================
+
     def select_date(self, day):
-        self.selected_date = self.current_date.replace(day=day)
+        self.selected_date = self.current_date.replace(
+            day=day
+        )
 
         today = datetime.now()
 
@@ -779,10 +832,16 @@ class PrepWiseApp:
             )
         else:
             self.selected_date_label.config(
-                text=self.selected_date.strftime("%d %B %Y")
+                text=self.selected_date.strftime(
+                    "%d %B %Y"
+                )
             )
 
-        self.show_meals() #This tells python that the user just clicked a date, so it has to now show the meals that were saved for that date
+        self.show_meals()
+
+    # ==========================================================
+    # SHOW MEALS
+    # ==========================================================
 
     def show_meals(self):
         for item in self.meal_tree.get_children():
@@ -791,16 +850,21 @@ class PrepWiseApp:
         if self.selected_date is None:
             return
 
-        date = self.selected_date.strftime("%Y-%m-%d")
+        date = self.selected_date.strftime(
+            "%Y-%m-%d"
+        )
 
         self.cursor.execute(
             """
             SELECT meal
             FROM meals
-            WHERE date = ?
+            WHERE user_id = ? AND date = ?
             ORDER BY id
             """,
-            (date,)
+            (
+                self.user_id,
+                date
+            )
         )
 
         meals = self.cursor.fetchall()
@@ -811,6 +875,10 @@ class PrepWiseApp:
                 "end",
                 values=(meal[0],)
             )
+
+    # ==========================================================
+    # ADD MEAL
+    # ==========================================================
 
     def add_meal(self):
         meal = self.meal_entry.get().strip()
@@ -829,19 +897,29 @@ class PrepWiseApp:
             )
             return
 
-        date = self.selected_date.strftime("%Y-%m-%d")
+        date = self.selected_date.strftime(
+            "%Y-%m-%d"
+        )
 
         self.cursor.execute(
             """
-            INSERT INTO meals (date, meal)
-            VALUES (?, ?)
+            INSERT INTO meals
+            (user_id, date, meal)
+            VALUES (?, ?, ?)
             """,
-            (date, meal)
+            (
+                self.user_id,
+                date,
+                meal
+            )
         )
 
         self.database.commit()
 
-        self.meal_entry.delete(0, tk.END)
+        self.meal_entry.delete(
+            0,
+            tk.END
+        )
 
         self.show_meals()
         self.display_calendar()
@@ -851,10 +929,14 @@ class PrepWiseApp:
             "Your meal has been added."
         )
 
+    # ==========================================================
+    # MONTH NAVIGATION
+    # ==========================================================
+
     def previous_month(self):
         if self.current_date.month == 1:
             self.current_date = self.current_date.replace(
-                year=self.current_date.year - 1, # Helps my program navagate between the years so if we go back from january to 2025 it will reset and make the year 2025 aswell as December
+                year=self.current_date.year - 1,
                 month=12
             )
         else:
@@ -880,7 +962,7 @@ class PrepWiseApp:
         self.create_calendar()
 
     # ==========================================================
-    # Reminders
+    # REMINDERS
     # ==========================================================
 
     def meal_reminders(self):
@@ -1163,6 +1245,10 @@ class PrepWiseApp:
         self.load_reminders()
         self.start_reminder_checker()
 
+    # ==========================================================
+    # ADD REMINDER
+    # ==========================================================
+
     def add_reminder(self):
         date = self.reminder_date_entry.get().strip()
         time = self.reminder_time_entry.get().strip()
@@ -1189,17 +1275,34 @@ class PrepWiseApp:
 
         self.cursor.execute(
             """
-            INSERT INTO reminders (date, time, reminder)
-            VALUES (?, ?, ?)
+            INSERT INTO reminders
+            (user_id, date, time, reminder)
+            VALUES (?, ?, ?, ?)
             """,
-            (date, time, reminder)
+            (
+                self.user_id,
+                date,
+                time,
+                reminder
+            )
         )
 
         self.database.commit()
 
-        self.reminder_date_entry.delete(0, tk.END)
-        self.reminder_time_entry.delete(0, tk.END)
-        self.reminder_entry.delete(0, tk.END)
+        self.reminder_date_entry.delete(
+            0,
+            tk.END
+        )
+
+        self.reminder_time_entry.delete(
+            0,
+            tk.END
+        )
+
+        self.reminder_entry.delete(
+            0,
+            tk.END
+        )
 
         self.load_reminders()
 
@@ -1207,6 +1310,10 @@ class PrepWiseApp:
             "Reminder Added",
             "Your reminder has been saved."
         )
+
+    # ==========================================================
+    # LOAD REMINDERS
+    # ==========================================================
 
     def load_reminders(self):
         if not hasattr(self, "reminder_tree"):
@@ -1219,8 +1326,10 @@ class PrepWiseApp:
             """
             SELECT id, date, time, reminder
             FROM reminders
+            WHERE user_id = ?
             ORDER BY date, time
-            """
+            """,
+            (self.user_id,)
         )
 
         reminders = self.cursor.fetchall()
@@ -1230,8 +1339,16 @@ class PrepWiseApp:
                 "",
                 "end",
                 iid=str(reminder_id),
-                values=(date, time, text)
+                values=(
+                    date,
+                    time,
+                    text
+                )
             )
+
+    # ==========================================================
+    # DELETE REMINDER
+    # ==========================================================
 
     def delete_reminder(self):
         selected = self.reminder_tree.selection()
@@ -1254,13 +1371,23 @@ class PrepWiseApp:
         reminder_id = selected[0]
 
         self.cursor.execute(
-            "DELETE FROM reminders WHERE id = ?",
-            (reminder_id,)
+            """
+            DELETE FROM reminders
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                reminder_id,
+                self.user_id
+            )
         )
 
         self.database.commit()
 
         self.load_reminders()
+
+    # ==========================================================
+    # REMINDER CHECKER
+    # ==========================================================
 
     def start_reminder_checker(self):
         self.stop_reminder_checker()
@@ -1269,7 +1396,9 @@ class PrepWiseApp:
     def stop_reminder_checker(self):
         if self.reminder_job is not None:
             try:
-                self.root.after_cancel(self.reminder_job)
+                self.root.after_cancel(
+                    self.reminder_job
+                )
             except tk.TclError:
                 pass
 
@@ -1278,16 +1407,27 @@ class PrepWiseApp:
     def check_notifications(self):
         current_datetime = datetime.now()
 
-        current_date = current_datetime.strftime("%d/%m/%Y")
-        current_time = current_datetime.strftime("%H:%M")
+        current_date = current_datetime.strftime(
+            "%d/%m/%Y"
+        )
+
+        current_time = current_datetime.strftime(
+            "%H:%M"
+        )
 
         self.cursor.execute(
             """
             SELECT id, reminder
             FROM reminders
-            WHERE date = ? AND time = ?
+            WHERE user_id = ?
+            AND date = ?
+            AND time = ?
             """,
-            (current_date, current_time)
+            (
+                self.user_id,
+                current_date,
+                current_time
+            )
         )
 
         reminders = self.cursor.fetchall()
@@ -1299,8 +1439,14 @@ class PrepWiseApp:
             )
 
             self.cursor.execute(
-                "DELETE FROM reminders WHERE id = ?",
-                (reminder_id,)
+                """
+                DELETE FROM reminders
+                WHERE id = ? AND user_id = ?
+                """,
+                (
+                    reminder_id,
+                    self.user_id
+                )
             )
 
         self.database.commit()
@@ -1314,7 +1460,7 @@ class PrepWiseApp:
         )
 
     # ==========================================================
-    # Cookbook
+    # COOKBOOK
     # ==========================================================
 
     def cookbook(self):
@@ -1689,6 +1835,10 @@ class PrepWiseApp:
 
         self.load_recipes()
 
+    # ==========================================================
+    # SAVE RECIPE
+    # ==========================================================
+
     def save_recipe(self):
         name = self.recipe_name_entry.get().strip()
 
@@ -1726,10 +1876,15 @@ class PrepWiseApp:
         self.cursor.execute(
             """
             INSERT INTO recipes
-            (name, ingredients, instructions)
-            VALUES (?, ?, ?)
+            (user_id, name, ingredients, instructions)
+            VALUES (?, ?, ?, ?)
             """,
-            (name, ingredients, instructions)
+            (
+                self.user_id,
+                name,
+                ingredients,
+                instructions
+            )
         )
 
         self.database.commit()
@@ -1756,6 +1911,10 @@ class PrepWiseApp:
             "Your recipe has been saved."
         )
 
+    # ==========================================================
+    # LOAD RECIPES
+    # ==========================================================
+
     def load_recipes(self):
         if not hasattr(self, "recipe_tree"):
             return
@@ -1767,8 +1926,10 @@ class PrepWiseApp:
             """
             SELECT id, name
             FROM recipes
+            WHERE user_id = ?
             ORDER BY name
-            """
+            """,
+            (self.user_id,)
         )
 
         recipes = self.cursor.fetchall()
@@ -1780,6 +1941,10 @@ class PrepWiseApp:
                 iid=str(recipe_id),
                 values=(name,)
             )
+
+    # ==========================================================
+    # SHOW RECIPE
+    # ==========================================================
 
     def show_recipe(self, event=None):
         selected = self.recipe_tree.selection()
@@ -1793,9 +1958,12 @@ class PrepWiseApp:
             """
             SELECT name, ingredients, instructions
             FROM recipes
-            WHERE id = ?
+            WHERE id = ? AND user_id = ?
             """,
-            (recipe_id,)
+            (
+                recipe_id,
+                self.user_id
+            )
         )
 
         recipe = self.cursor.fetchone()
@@ -1845,23 +2013,27 @@ class PrepWiseApp:
             state="disabled"
         )
 
+    # ==========================================================
+    # DELETE RECIPE
+    # ==========================================================
+
     def delete_recipe(self):
-          # Get the recipe selected in the list
         selected = self.recipe_tree.selection()
-          # Check if the user selected a recipe
+
         if not selected:
             messagebox.showerror(
                 "Error",
                 "Please select a recipe first."
             )
             return
-         # Get the name of the selected recipe
+
         recipe_id = selected[0]
+
         recipe_name = self.recipe_tree.item(
             recipe_id,
             "values"
         )[0]
-         # Ask the user to confirm the deletion
+
         confirm = messagebox.askyesno(
             "Delete Recipe",
             f"Are you sure you want to delete '{recipe_name}'?"
@@ -1869,16 +2041,22 @@ class PrepWiseApp:
 
         if not confirm:
             return
-         # Delete the recipe from the database
+
         self.cursor.execute(
-            "DELETE FROM recipes WHERE id = ?",
-            (recipe_id,)
+            """
+            DELETE FROM recipes
+            WHERE id = ? AND user_id = ?
+            """,
+            (
+                recipe_id,
+                self.user_id
+            )
         )
 
         self.database.commit()
-        # Remove the recipe from the Listbox
+
         self.load_recipes()
-        # Clear the recipe display
+
         self.recipe_display_title.config(
             text="Select a recipe"
         )
@@ -1908,56 +2086,139 @@ class PrepWiseApp:
         self.recipe_instructions.config(
             state="disabled"
         )
-        # Tell the user the recipe was deleted
+
         messagebox.showinfo(
             "Recipe Deleted",
             "The recipe has been deleted."
         )
 
     # ==========================================================
-    # Login / Logout
+    # LOGOUT / CLOSE
     # ==========================================================
 
     def logout(self):
         self.stop_reminder_checker()
+
+        self.database.close()
+
         self.clear_window()
+
         LoginSystem(self.root)
 
     def close_app(self):
         self.stop_reminder_checker()
+
         self.database.close()
+
         self.root.destroy()
 
 
+# ==============================================================
+# LOGIN SYSTEM
+# ==============================================================
+
 class LoginSystem:
+
     def __init__(self, root):
         self.root = root
 
         self.root.title("PrepWise - Login")
         self.root.geometry("1000x750")
-        self.root.minsize(700, 500)
+        self.root.minsize(500, 500)
 
-        # Database connection for registered accounts
+        # ======================================================
+        # DATABASE
+        # ======================================================
+
         self.database = sqlite3.connect("prepwise.db")
         self.cursor = self.database.cursor()
 
-        # Make sure the users table exists
         self.create_users_table()
 
+        # ======================================================
+        # STYLE
+        # ======================================================
+
         self.setup_style()
+
+        # ======================================================
+        # LOGIN
+        # ======================================================
+
         self.create_login()
 
-    # Creates a table to store registered usernames and passwords
+        self.root.protocol(
+            "WM_DELETE_WINDOW",
+            self.close_app
+        )
+
+    # ==========================================================
+    # DATABASE
+    # ==========================================================
+
     def create_users_table(self):
         self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS simple_users (
+            CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL
             )
         """)
 
         self.database.commit()
+
+    # ==========================================================
+    # PASSWORD SECURITY
+    # ==========================================================
+
+    def hash_password(
+        self,
+        password,
+        salt=None
+    ):
+
+        if salt is None:
+            salt = os.urandom(16)
+
+        password_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            600000
+        )
+
+        return (
+            password_hash.hex(),
+            salt.hex()
+        )
+
+    def check_password(
+        self,
+        password,
+        stored_hash,
+        stored_salt
+    ):
+
+        salt = bytes.fromhex(
+            stored_salt
+        )
+
+        password_hash = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt,
+            600000
+        )
+
+        return hmac.compare_digest(
+            password_hash.hex(),
+            stored_hash
+        )
+
+    # ==========================================================
+    # STYLE
+    # ==========================================================
 
     def setup_style(self):
         style = ttk.Style()
@@ -2008,6 +2269,10 @@ class LoginSystem:
             font=("Lexend", 10, "bold"),
             padding=(16, 10)
         )
+
+    # ==========================================================
+    # LOGIN SCREEN
+    # ==========================================================
 
     def create_login(self):
 
@@ -2160,11 +2425,15 @@ class LoginSystem:
 
         self.username_entry.focus()
 
+    # ==========================================================
+    # LOGIN
+    # ==========================================================
+
     def login(self):
+
         username = self.username_entry.get().strip()
         password = self.password_entry.get()
 
-        # Validation check - both fields must be completed
         if not username or not password:
             messagebox.showerror(
                 "Login Failed",
@@ -2172,28 +2441,42 @@ class LoginSystem:
             )
             return
 
-        # Check whether the entered details belong to a registered user
         self.cursor.execute(
-            "SELECT id FROM simple_users WHERE username = ? AND password = ?",
-            (username, password)
+            """
+            SELECT id, password_hash, salt
+            FROM users
+            WHERE username = ?
+            """,
+            (username,)
         )
 
-        registered_user = self.cursor.fetchone()
+        user = self.cursor.fetchone()
 
-        if registered_user:
-            for widget in self.root.winfo_children():
-                widget.destroy()
-
-            PrepWiseApp(self.root)
+        if user is None:
+            messagebox.showerror(
+                "Login Failed",
+                "Incorrect username or password."
+            )
             return
 
-        # Simple login for the current project.
+        user_id, stored_hash, stored_salt = user
 
-        if username == "admin" and password == "3344":
+        if self.check_password(
+            password,
+            stored_hash,
+            stored_salt
+        ):
+
+            self.database.close()
+
             for widget in self.root.winfo_children():
                 widget.destroy()
 
-            PrepWiseApp(self.root)
+            PrepWiseApp(
+                self.root,
+                user_id,
+                username
+            )
 
         else:
             messagebox.showerror(
@@ -2202,7 +2485,7 @@ class LoginSystem:
             )
 
     # ==========================================================
-    # Registration
+    # REGISTRATION SCREEN
     # ==========================================================
 
     def create_registration(self):
@@ -2333,12 +2616,12 @@ class LoginSystem:
             sticky="w"
         )
 
-        self.confirm_password_entry = ttk.Entry(
+        self.register_confirm_entry = ttk.Entry(
             registration_frame,
             show="*"
         )
 
-        self.confirm_password_entry.grid(
+        self.register_confirm_entry.grid(
             row=7,
             column=0,
             sticky="ew",
@@ -2375,20 +2658,25 @@ class LoginSystem:
 
         self.register_username_entry.focus()
 
+    # ==========================================================
+    # REGISTER
+    # ==========================================================
+
     def register(self):
+
         username = self.register_username_entry.get().strip()
         password = self.register_password_entry.get()
-        confirm_password = self.confirm_password_entry.get()
+        confirm_password = self.register_confirm_entry.get()
 
-        # Check that every field has been completed
-        if not username or not password or not confirm_password:
+        # Username validation
+
+        if not username:
             messagebox.showerror(
                 "Registration Error",
-                "Please complete all fields."
+                "Please enter a username."
             )
             return
 
-        # Check that the username is long enough
         if len(username) < 3:
             messagebox.showerror(
                 "Registration Error",
@@ -2396,23 +2684,24 @@ class LoginSystem:
             )
             return
 
-        # Check that the username only contains letters and numbers
-        if not username.isalnum():
+        # Password validation
+
+        if not password:
             messagebox.showerror(
                 "Registration Error",
-                "Username can only contain letters and numbers."
+                "Please enter a password."
             )
             return
 
-        # Check that the password is long enough
-        if len(password) < 4:
+        if len(password) < 8:
             messagebox.showerror(
                 "Registration Error",
-                "Password must be at least 4 characters."
+                "Password must be at least 8 characters."
             )
             return
 
-        # Check that both passwords match
+        # Confirm password
+
         if password != confirm_password:
             messagebox.showerror(
                 "Registration Error",
@@ -2420,42 +2709,74 @@ class LoginSystem:
             )
             return
 
-        # Check whether the username already exists
+        # Check duplicate username
+
         self.cursor.execute(
-            "SELECT username FROM simple_users WHERE username = ?",
+            """
+            SELECT id
+            FROM users
+            WHERE username = ?
+            """,
             (username,)
         )
 
         existing_user = self.cursor.fetchone()
 
-        if existing_user:
+        if existing_user is not None:
             messagebox.showerror(
                 "Registration Error",
-                "That username already exists."
+                "That username is already taken."
             )
             return
 
-        # Save the new account to the database
+        # Hash password
+
+        password_hash, salt = self.hash_password(
+            password
+        )
+
+        # Insert user
+
         self.cursor.execute(
-            "INSERT INTO simple_users (username, password) VALUES (?, ?)",
-            (username, password)
+            """
+            INSERT INTO users
+            (username, password_hash, salt)
+            VALUES (?, ?, ?)
+            """,
+            (
+                username,
+                password_hash,
+                salt
+            )
         )
 
         self.database.commit()
 
         messagebox.showinfo(
-            "Account Created",
-            "Your PrepWise account has been created successfully."
+            "Registration Successful",
+            "Your account has been created.\n\n"
+            "You can now log in."
         )
 
         self.create_login()
 
+    # ==========================================================
+    # CLOSE
+    # ==========================================================
 
-# ==========================================================
-# Starts program
-# ==========================================================
+    def close_app(self):
+        self.database.close()
+        self.root.destroy()
+
+
+# ==============================================================
+# START PROGRAM
+# ==============================================================
 
 if __name__ == "__main__":
+
     root = tk.Tk()
+
     LoginSystem(root)
+
     root.mainloop()
