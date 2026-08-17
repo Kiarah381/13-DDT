@@ -4,7 +4,7 @@ from datetime import datetime
 import calendar
 import sqlite3
 
-
+# modified - reminderto add lots of comments
 class PrepWiseApp:
     def __init__(self, root):
         self.root = root
